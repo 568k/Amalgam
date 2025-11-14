@@ -133,7 +133,8 @@ int CAimbotMelee::GetSwingTime(CTFWeaponBase* pWeapon, bool bVar)
 {
 	if (pWeapon->GetWeaponID() == TF_WEAPON_KNIFE)
 		return 0;
-	int iSmackTicks = ceilf(pWeapon->GetSmackDelay() / TICK_INTERVAL);
+    int iSmackTicks = ceilf(pWeapon->GetSmackDelay() / TICK_INTERVAL);
+    iSmackTicks += TIME_TO_TICKS(F::Backtrack.GetReal());
 	if (bVar)
 		iSmackTicks = std::max(iSmackTicks + Vars::Aimbot::Melee::SwingOffset.Value, 0);
 	return iSmackTicks;
@@ -146,7 +147,9 @@ void CAimbotMelee::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 	m_vEyePos = pLocal->GetShootPos();
 	m_flRange = pWeapon->GetSwingRange();
 
-	int iSimTicks = GetSwingTime(pWeapon), iSwingTicks = GetSwingTime(pWeapon, false);
+    int iSimTicks = GetSwingTime(pWeapon), iSwingTicks = GetSwingTime(pWeapon, false);
+    iSimTicks = std::max(iSimTicks, 0);
+    iSwingTicks = std::max(iSwingTicks, 0);
 
 	if ((Vars::Aimbot::Melee::SwingPrediction.Value && iSimTicks || m_iDoubletapTicks) && G::CanPrimaryAttack && pWeapon->m_flSmackTime() < 0.f)
 	{
@@ -156,18 +159,18 @@ void CAimbotMelee::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 		for (auto& tTarget : vTargets)
 			F::MoveSim.Initialize(tTarget.m_pEntity, mStorage[tTarget.m_pEntity->entindex()], false);
 
-		int iMax = std::max(iSimTicks, m_iDoubletapTicks);
-		int iTicks = iMax; bool bSwung = false;
-		for (int i = 0; i < iTicks; i++) // intended for plocal to collide with targets
-		{
-			{
-				auto& tStorage = mStorage[I::EngineClient->GetLocalPlayer()];
+        int iMax = std::max(iSimTicks, m_iDoubletapTicks);
+        int iTicks = iMax; bool bSwung = false;
+        for (int i = 0; i < iTicks; i++) // intended for plocal to collide with targets
+        {
+            {
+                auto& tStorage = mStorage[I::EngineClient->GetLocalPlayer()];
 
-				if (!bSwung && (!m_iDoubletapTicks || Vars::Doubletap::AntiWarp.Value && pLocal->m_hGroundEntity() || iMax - i <= iSwingTicks))
-				{
-					iTicks = std::min(i + iSwingTicks, iMax), bSwung = true;
-					if (!iSwingTicks)
-						break;
+                if (!bSwung && (!m_iDoubletapTicks || Vars::Doubletap::AntiWarp.Value && pLocal->m_hGroundEntity() || iMax - i <= iSwingTicks))
+                {
+                    iTicks = std::min(i + iSwingTicks, iMax), bSwung = true;
+                    if (!iSwingTicks)
+                        break;
 
 					if (pLocal->InCond(TF_COND_SHIELD_CHARGE))
 					{	// demo charge fix for swing pred
@@ -187,25 +190,25 @@ void CAimbotMelee::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 				);
 			}
 
-			if (i < iSimTicks - m_iDoubletapTicks)
-			{
-				for (auto& tTarget : vTargets)
-				{
-					auto& tStorage = mStorage[tTarget.m_pEntity->entindex()];
-					if (tStorage.m_bFailed)
-						continue;
+            if (i < iSimTicks - m_iDoubletapTicks)
+            {
+                for (auto& tTarget : vTargets)
+                {
+                    auto& tStorage = mStorage[tTarget.m_pEntity->entindex()];
+                    if (tStorage.m_bFailed)
+                        continue;
 
-					F::MoveSim.RunTick(tStorage);
-					m_mRecordMap[tTarget.m_pEntity->entindex()].emplace_front(
-						!Vars::Aimbot::Melee::SwingPredictLag.Value || tStorage.m_bPredictNetworked ? tTarget.m_pEntity->m_flSimulationTime() + TICKS_TO_TIME(i + 1) : 0.f,
-						Vars::Aimbot::Melee::SwingPredictLag.Value ? tStorage.m_vPredictedOrigin : tStorage.m_MoveData.m_vecAbsOrigin,
-						tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs()
-					);
-				}
-			}
-		}
-		m_vEyePos = mStorage[I::EngineClient->GetLocalPlayer()].m_MoveData.m_vecAbsOrigin + pLocal->m_vecViewOffset();
-		m_flRange = pWeapon->GetSwingRange();
+                    F::MoveSim.RunTick(tStorage);
+                    m_mRecordMap[tTarget.m_pEntity->entindex()].emplace_front(
+                        !Vars::Aimbot::Melee::SwingPredictLag.Value || tStorage.m_bPredictNetworked ? tTarget.m_pEntity->m_flSimulationTime() + TICKS_TO_TIME(i + 1) : 0.f,
+                        Vars::Aimbot::Melee::SwingPredictLag.Value ? tStorage.m_vPredictedOrigin : tStorage.m_MoveData.m_vecAbsOrigin,
+                        tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs()
+                    );
+                }
+            }
+        }
+        m_vEyePos = mStorage[I::EngineClient->GetLocalPlayer()].m_MoveData.m_vecAbsOrigin + pLocal->m_vecViewOffset();
+        m_flRange = pWeapon->GetSwingRange();
 
 		if (Vars::Visuals::Simulation::SwingLines.Value && Vars::Visuals::Simulation::PlayerPath.Value)
 		{
@@ -233,7 +236,7 @@ void CAimbotMelee::UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCm
 			F::MoveSim.Restore(tStorage);
 	}
 
-	m_bShouldSwing = m_iDoubletapTicks <= iSwingTicks || Vars::Doubletap::AntiWarp.Value && pLocal->m_hGroundEntity();
+    m_bShouldSwing = m_iDoubletapTicks <= iSwingTicks || Vars::Doubletap::AntiWarp.Value && pLocal->m_hGroundEntity();
 }
 
 bool CAimbotMelee::CanBackstab(CBaseEntity* pTarget, CTFPlayer* pLocal, Vec3 vEyeAngles)
@@ -368,11 +371,13 @@ int CAimbotMelee::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pW
 	CGameTrace trace = {};
 	CTraceFilterHitscan filter = {};
 	filter.pSkip = pLocal;
-	for (auto pRecord : vRecords)
-	{
-		Vec3 vRestoreOrigin = tTarget.m_pEntity->GetAbsOrigin();
-		Vec3 vRestoreMins = tTarget.m_pEntity->m_vecMins();
-		Vec3 vRestoreMaxs = tTarget.m_pEntity->m_vecMaxs();
+    for (auto pRecord : vRecords)
+    {
+        if (m_vEyePos.DistToSqr(pRecord->m_vOrigin) > flRange * flRange)
+            continue;
+        Vec3 vRestoreOrigin = tTarget.m_pEntity->GetAbsOrigin();
+        Vec3 vRestoreMins = tTarget.m_pEntity->m_vecMins();
+        Vec3 vRestoreMaxs = tTarget.m_pEntity->m_vecMaxs();
 
 		tTarget.m_pEntity->SetAbsOrigin(pRecord->m_vOrigin);
 		tTarget.m_pEntity->m_vecMins() = pRecord->m_vMins + 0.125f; // account for origin compression
@@ -561,6 +566,9 @@ void CAimbotMelee::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd
 
 	if (F::AimbotGlobal.ShouldHoldAttack(pWeapon))
 		pCmd->buttons |= IN_ATTACK;
+
+	if ((pCmd->buttons & IN_ATTACK) && G::CanPrimaryAttack && pWeapon->m_flSmackTime() >= pWeapon->m_flNextPrimaryAttack())
+		pWeapon->m_flSmackTime() = pWeapon->m_flNextPrimaryAttack() - 0.01f;
 	if (!Vars::Aimbot::General::AimType.Value
 		|| !F::AimbotGlobal.ShouldAim() && pWeapon->m_flSmackTime() < 0.f)
 		return;

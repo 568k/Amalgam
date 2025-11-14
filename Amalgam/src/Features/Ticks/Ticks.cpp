@@ -63,17 +63,20 @@ void CTicks::Doubletap(CTFPlayer* pLocal, CUserCmd* pCmd)
 		|| m_iWait || m_bWarp || m_bRecharge || m_bSpeedhack)
 		return;
 
-	int iTicks = std::min(m_iShiftedTicks + 1, 22);
-	auto pWeapon = H::Entities.GetWeapon();
-	if (!(iTicks >= Vars::Doubletap::TickLimit.Value || pWeapon && GetShotsWithinPacket(pWeapon, iTicks) > 1))
-		return;
+    int iTicks = std::min(m_iShiftedTicks + 1, 22);
+    int iRttTicks = TIME_TO_TICKS(F::Backtrack.GetReal(MAX_FLOWS, false));
+    static auto sv_maxusrcmdprocessticks = H::ConVars.FindVar("sv_maxusrcmdprocessticks");
+    int iProcGate = std::max(sv_maxusrcmdprocessticks->GetInt() - 1, 1);
+    auto pWeapon = H::Entities.GetWeapon();
+    if (!(iTicks >= Vars::Doubletap::TickLimit.Value || iTicks >= iRttTicks || iTicks >= iProcGate || pWeapon && GetShotsWithinPacket(pWeapon, iTicks) > 1))
+        return;
 
 	bool bAttacking = G::PrimaryWeaponType == EWeaponType::MELEE ? pCmd->buttons & IN_ATTACK : G::Attacking;
 	if (!G::CanPrimaryAttack && !G::Reloading || !bAttacking && !m_bDoubletap || F::AutoRocketJump.IsRunning())
 		return;
 
 	m_bDoubletap = true;
-	m_iShiftedGoal = std::max(m_iShiftedTicks - Vars::Doubletap::TickLimit.Value + 1, 0);
+	m_iShiftedGoal = std::max(m_iShiftedTicks - std::min(Vars::Doubletap::TickLimit.Value, m_iMaxShift) + 1, 0);
 	if (Vars::Doubletap::AntiWarp.Value)
 		m_bAntiWarp = pLocal->m_hGroundEntity();
 }
@@ -154,10 +157,13 @@ void CTicks::MoveFunc(float accumulated_extra_samples, bool bFinalTick)
 	if (m_iWait > 0)
 		m_iWait--;
 
-	int iTicks = std::min(m_iShiftedTicks + 1, 22);
-	auto pWeapon = H::Entities.GetWeapon();
-	if (!(iTicks >= Vars::Doubletap::TickLimit.Value || pWeapon && GetShotsWithinPacket(pWeapon, iTicks) > 1))
-		m_iWait = 1;
+    int iTicks = std::min(m_iShiftedTicks + 1, 22);
+    int iRttTicks = TIME_TO_TICKS(F::Backtrack.GetReal(MAX_FLOWS, false));
+    static auto sv_maxusrcmdprocessticks2 = H::ConVars.FindVar("sv_maxusrcmdprocessticks");
+    int iProcGate2 = std::max(sv_maxusrcmdprocessticks2->GetInt() - 1, 1);
+    auto pWeapon = H::Entities.GetWeapon();
+    if (!(iTicks >= Vars::Doubletap::TickLimit.Value || iTicks >= iRttTicks || iTicks >= iProcGate2 || pWeapon && GetShotsWithinPacket(pWeapon, iTicks) > 1))
+        m_iWait = 1;
 
 	m_bGoalReached = bFinalTick && m_iShiftedTicks == m_iShiftedGoal;
 

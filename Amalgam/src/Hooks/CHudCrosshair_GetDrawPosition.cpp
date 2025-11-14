@@ -10,9 +10,9 @@ MAKE_HOOK(CHudCrosshair_GetDrawPosition, S::CHudCrosshair_GetDrawPosition(), voi
 		return CALL_ORIGINAL(pX, pY, pbBehindCamera, angleCrosshairOffset);
 #endif
 
-	if (!Vars::Visuals::Viewmodel::CrosshairAim.Value && !Vars::Visuals::Thirdperson::Crosshair.Value
-		|| Vars::Visuals::UI::CleanScreenshots.Value && I::EngineClient->IsTakingScreenshot())
-		return CALL_ORIGINAL(pX, pY, pbBehindCamera, angleCrosshairOffset);
+    if (!Vars::Visuals::Viewmodel::CrosshairAim.Value && !Vars::Visuals::Thirdperson::Crosshair.Value
+        || Vars::Visuals::UI::CleanScreenshots.Value && I::EngineClient->IsTakingScreenshot())
+        return CALL_ORIGINAL(pX, pY, pbBehindCamera, angleCrosshairOffset);
 
 	auto pLocal = H::Entities.GetLocal();
 	if (!pLocal)
@@ -20,22 +20,22 @@ MAKE_HOOK(CHudCrosshair_GetDrawPosition, S::CHudCrosshair_GetDrawPosition(), voi
 
 	bool bSet = false;
 
-	if (Vars::Visuals::Viewmodel::CrosshairAim.Value && pLocal->IsAlive() && G::AimPoint.m_iTickCount)
-	{
-		Vec3 vScreen;
-		if (SDK::W2S(G::AimPoint.m_vOrigin, vScreen))
-		{
-			if (pX) *pX = vScreen.x;
-			if (pY) *pY = vScreen.y;
-			if (pbBehindCamera) *pbBehindCamera = false;
-			bSet = true;
-		}
-	}
+    if (Vars::Visuals::Viewmodel::CrosshairAim.Value && pLocal->IsAlive() && G::AimPoint.m_iTickCount)
+    {
+        Vec3 vScreen;
+        if (SDK::W2S(G::AimPoint.m_vOrigin, vScreen))
+        {
+            if (pX) *pX = vScreen.x;
+            if (pY) *pY = vScreen.y;
+            if (pbBehindCamera) *pbBehindCamera = false;
+            bSet = true;
+        }
+    }
 
-	if (Vars::Visuals::Thirdperson::Crosshair.Value && !bSet && I::Input->CAM_IsThirdPerson())
-	{
-		Vec3 vAngles = I::EngineClient->GetViewAngles();
-		Vec3 vForward; Math::AngleVectors(vAngles, &vForward);
+    if (Vars::Visuals::Thirdperson::Crosshair.Value && !bSet && I::Input->CAM_IsThirdPerson())
+    {
+        Vec3 vAngles = I::EngineClient->GetViewAngles();
+        Vec3 vForward; Math::AngleVectors(vAngles, &vForward);
 
 		Vec3 vStartPos = pLocal->GetEyePosition();
 		Vec3 vEndPos = vStartPos + vForward * 8192;
@@ -55,6 +55,6 @@ MAKE_HOOK(CHudCrosshair_GetDrawPosition, S::CHudCrosshair_GetDrawPosition(), voi
 		}
 	}
 
-	if (!bSet)
-		CALL_ORIGINAL(pX, pY, pbBehindCamera, angleCrosshairOffset);
+    if (!bSet)
+        CALL_ORIGINAL(pX, pY, pbBehindCamera, angleCrosshairOffset);
 }

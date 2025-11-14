@@ -19,6 +19,7 @@
 static std::unordered_map<std::string, int> s_mTraceCount = {};
 #endif
 
+
 std::vector<Target_t> CAimbotProjectile::GetTargets(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
 	std::vector<Target_t> vTargets;
@@ -996,7 +997,10 @@ void CAimbotProjectile::CalculateAngle(const Vec3& vLocalPos, const Vec3& vTarge
 			float flRoot = pow(flVelocity, 4) - flGrav * (flGrav * pow(flDist, 2) + 2.f * vDelta.z * pow(flVelocity, 2));
 			if (out.m_iCalculated = flRoot < 0.f ? CalculatedEnum::Bad : CalculatedEnum::Pending)
 				return;
-			flPitch = atan((pow(flVelocity, 2) - sqrt(flRoot)) / (flGrav * flDist));
+			float flPitchLow = atan((pow(flVelocity, 2) - sqrt(flRoot)) / (flGrav * flDist));
+			float flPitchHigh = atan((pow(flVelocity, 2) + sqrt(flRoot)) / (flGrav * flDist));
+			bool bObstructed = !SDK::VisPosWorld(nullptr, nullptr, vLocalPos, vTargetPos, MASK_SHOT);
+			flPitch = bObstructed ? flPitchHigh : flPitchLow;
 		}
 		out.m_flTime = flDist / (cos(flPitch) * flVelocity) - m_tInfo.m_flOffsetTime + flDragTime;
 		out.m_flPitch = flPitch = -RAD2DEG(flPitch) - m_tInfo.m_vAngFix.x;
@@ -1064,7 +1068,10 @@ void CAimbotProjectile::CalculateAngle(const Vec3& vLocalPos, const Vec3& vTarge
 			float flRoot = pow(flVelocity, 4) - flGrav * (flGrav * pow(flDist, 2) + 2.f * vDelta.z * pow(flVelocity, 2));
 			if (out.m_iCalculated = flRoot < 0.f ? CalculatedEnum::Bad : CalculatedEnum::Pending)
 				return;
-			out.m_flPitch = atan((pow(flVelocity, 2) - sqrt(flRoot)) / (flGrav * flDist));
+			float flPitchLow2 = atan((pow(flVelocity, 2) - sqrt(flRoot)) / (flGrav * flDist));
+			float flPitchHigh2 = atan((pow(flVelocity, 2) + sqrt(flRoot)) / (flGrav * flDist));
+			bool bObstructed2 = !SDK::VisPosWorld(nullptr, nullptr, tProjInfo.m_vPos, vTargetPos, MASK_SHOT);
+			out.m_flPitch = bObstructed2 ? flPitchHigh2 : flPitchLow2;
 		}
 		out.m_flTime = flDist / (cos(out.m_flPitch) * flVelocity) + flDragTime;
 	}
@@ -1109,6 +1116,7 @@ void CAimbotProjectile::CalculateAngle(const Vec3& vLocalPos, const Vec3& vTarge
 	iTimeTo = int(out.m_flTime / TICK_INTERVAL) + 1;
 	out.m_iCalculated = iTimeTo > iSimTime ? CalculatedEnum::Time : CalculatedEnum::Good;
 }
+
 
 
 

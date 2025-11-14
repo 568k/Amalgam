@@ -202,7 +202,7 @@ bool CMovementSimulation::Initialize(CBaseEntity* pEntity, MoveStorage& tStorage
 			if (vRecords.size() <= i + 2)
 				break;
 
-			const auto& pRecord1 = vRecords[i], &pRecord2 = vRecords[i + 1];
+			const auto& pRecord1 = vRecords[i], & pRecord2 = vRecords[i + 1];
 			const float flYaw1 = Math::VectorAngles(pRecord1.m_vDirection).y, flYaw2 = Math::VectorAngles(pRecord2.m_vDirection).y;
 			const float flTime1 = pRecord1.m_flSimTime, flTime2 = pRecord2.m_flSimTime;
 			const int iTicks = std::max(TIME_TO_TICKS(flTime1 - flTime2), 1);

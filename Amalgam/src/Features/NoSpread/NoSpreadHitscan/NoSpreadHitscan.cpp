@@ -104,15 +104,19 @@ bool CNoSpreadHitscan::ParsePlayerPerf(const std::string& sMsg)
 			m_dTimeDelta = 0.f;
 		else
 		{
-			m_vTimeDeltas.push_back(m_flServerTime - m_dRequestTime + TICKS_TO_TIME(1));
-			while (!m_vTimeDeltas.empty() && m_vTimeDeltas.size() > Vars::Aimbot::General::NoSpreadAverage.Value)
-				m_vTimeDeltas.pop_front();
-			m_dTimeDelta = std::reduce(m_vTimeDeltas.begin(), m_vTimeDeltas.end()) / m_vTimeDeltas.size();
+            m_vTimeDeltas.push_back(m_flServerTime - m_dRequestTime + TICKS_TO_TIME(1));
+            while (!m_vTimeDeltas.empty() && m_vTimeDeltas.size() > Vars::Aimbot::General::NoSpreadAverage.Value)
+                m_vTimeDeltas.pop_front();
+            double dAvg = std::reduce(m_vTimeDeltas.begin(), m_vTimeDeltas.end()) / m_vTimeDeltas.size();
+            if (m_vTimeDeltas.size() > 1)
+                m_dTimeDelta = m_dTimeDelta ? m_dTimeDelta * 0.85 + dAvg * 0.15 : dAvg;
+            else
+                m_dTimeDelta = dAvg;
 		}
 		m_dTimeDelta += TICKS_TO_TIME(Vars::Aimbot::General::NoSpreadOffset.Value);
 
 		float flMantissaStep = CalcMantissaStep(m_flServerTime);
-		m_bSynced = flMantissaStep >= 1.f || bLoopback;
+        m_bSynced = (m_flServerTime >= 1200 && flMantissaStep >= 1.f) || bLoopback;
 
 		if (flMantissaStep > m_flMantissaStep && (m_bSynced || !m_flMantissaStep))
 		{

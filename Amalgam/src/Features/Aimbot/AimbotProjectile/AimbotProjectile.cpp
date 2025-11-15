@@ -978,7 +978,7 @@ void CAimbotProjectile::CalculateAngle(const Vec3& vLocalPos, const Vec3& vTarge
 
 	float flPitch, flYaw;
 	{	// basic trajectory pass
-		float flVelocity = m_tInfo.m_flVelocity, flDragTime = 0.f;
+		float flVelocity = m_tInfo.m_flVelocity, flDragTime = 0.f; float flBaseVelocity = m_tInfo.m_flVelocity;
 		if (F::ProjSim.m_pObj->IsDragEnabled() && !F::ProjSim.m_pObj->m_dragBasis.IsZero() && m_tInfo.m_pWeapon)
 		{
 			Vec3 vForward, vRight, vUp; Math::AngleVectors(Math::CalcAngle(vLocalPos, vTargetPos), &vForward, &vRight, &vUp);
@@ -995,6 +995,15 @@ void CAimbotProjectile::CalculateAngle(const Vec3& vLocalPos, const Vec3& vTarge
 		else
 		{	// arch
 			float flRoot = pow(flVelocity, 4) - flGrav * (flGrav * pow(flDist, 2) + 2.f * vDelta.z * pow(flVelocity, 2));
+			if (flRoot < 0.f)
+			{
+				float flRoot2 = pow(flBaseVelocity, 4) - flGrav * (flGrav * pow(flDist, 2) + 2.f * vDelta.z * pow(flBaseVelocity, 2));
+				if (flRoot2 >= 0.f)
+				{
+					flVelocity = flBaseVelocity;
+					flRoot = flRoot2;
+				}
+			}
 			if (out.m_iCalculated = flRoot < 0.f ? CalculatedEnum::Bad : CalculatedEnum::Pending)
 				return;
 			float flPitchLow = atan((pow(flVelocity, 2) - sqrt(flRoot)) / (flGrav * flDist));
@@ -1008,16 +1017,14 @@ void CAimbotProjectile::CalculateAngle(const Vec3& vLocalPos, const Vec3& vTarge
 	}
 
 	int iTimeTo = int(out.m_flTime / TICK_INTERVAL) + 1;
-	if (!m_tInfo.m_vOffset.IsZero())
+	if (m_tInfo.m_vOffset.IsZero())
 	{
-		if (out.m_iCalculated = iTimeTo > iSimTime ? CalculatedEnum::Time : CalculatedEnum::Pending)
+		out.m_iCalculated = iTimeTo > iSimTime ? CalculatedEnum::Time : CalculatedEnum::Good;
+		if (out.m_iCalculated == CalculatedEnum::Good)
 			return;
 	}
 	else
-	{
-		out.m_iCalculated = iTimeTo > iSimTime ? CalculatedEnum::Time : CalculatedEnum::Good;
-		return;
-	}
+		out.m_iCalculated = CalculatedEnum::Pending;
 
 	int iFlags = (bAccuracy ? ProjSimEnum::Trace : ProjSimEnum::None) | ProjSimEnum::NoRandomAngles | ProjSimEnum::PredictCmdNum;
 #ifdef SPLASH_DEBUG6
@@ -1054,7 +1061,7 @@ void CAimbotProjectile::CalculateAngle(const Vec3& vLocalPos, const Vec3& vTarge
 		return;
 
 	{	// calculate trajectory from projectile origin
-		float flVelocity = m_tInfo.m_flVelocity, flDragTime = 0.f;
+		float flVelocity = m_tInfo.m_flVelocity, flDragTime = 0.f; float flBaseVelocity = m_tInfo.m_flVelocity;
 		SolveProjectileSpeed(m_tInfo.m_pWeapon, tProjInfo.m_vPos, vTargetPos, flVelocity, flDragTime, m_tInfo.m_flGravity);
 
 		Vec3 vDelta = vTargetPos - tProjInfo.m_vPos;
@@ -1066,6 +1073,15 @@ void CAimbotProjectile::CalculateAngle(const Vec3& vLocalPos, const Vec3& vTarge
 		else
 		{	// arch
 			float flRoot = pow(flVelocity, 4) - flGrav * (flGrav * pow(flDist, 2) + 2.f * vDelta.z * pow(flVelocity, 2));
+			if (flRoot < 0.f)
+			{
+				float flRoot2 = pow(flBaseVelocity, 4) - flGrav * (flGrav * pow(flDist, 2) + 2.f * vDelta.z * pow(flBaseVelocity, 2));
+				if (flRoot2 >= 0.f)
+				{
+					flVelocity = flBaseVelocity;
+					flRoot = flRoot2;
+				}
+			}
 			if (out.m_iCalculated = flRoot < 0.f ? CalculatedEnum::Bad : CalculatedEnum::Pending)
 				return;
 			float flPitchLow2 = atan((pow(flVelocity, 2) - sqrt(flRoot)) / (flGrav * flDist));
@@ -1246,7 +1262,7 @@ bool CAimbotProjectile::TestAngle(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, Tar
 
 			bool bTime = bSplash
 				? trace.endpos.DistTo(vPoint) < tProjInfo.m_flVelocity * TICK_INTERVAL + tProjInfo.m_vHull.z
-				: iSimTime - n < 5 || pWeapon->GetWeaponID() == TF_WEAPON_LUNCHBOX; // projectile so slow it causes problems if we don't waive this check
+				: (iSimTime - n < std::max(5, TIME_TO_TICKS(m_tInfo.m_flBoundingTime))) || pWeapon->GetWeaponID() == TF_WEAPON_LUNCHBOX;
 			bool bTarget = trace.m_pEnt == tTarget.m_pEntity || bSplash;
 			bool bValid = bTarget && bTime;
 			if (bValid && bSplash)

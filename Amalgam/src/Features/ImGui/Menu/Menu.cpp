@@ -3648,7 +3648,7 @@ void CMenu::DrawBinds()
         PopStyleColor();
 
         SetCursorPos({ flPosX += flNameWidth, H::Draw.Scale(iListStart + 18 * i) });
-        PushStyleColor(ImGuiCol_Text, tBind.m_bActive ? F::Render.Accent.Value : F::Render.Inactive.Value);
+        PushStyleColor(ImGuiCol_Text, tBind.m_bActive ? F::Render.Active.Value : F::Render.Inactive.Value);
         FText(sState.c_str());
         PopStyleColor();
 
@@ -3687,7 +3687,7 @@ void CMenu::DrawBinds()
         }
 
         SetCursorPos({ flPosX += flValueWidth, H::Draw.Scale(iListStart + 18 * i) });
-        PushStyleColor(ImGuiCol_Text, tBind.m_bActive ? F::Render.Accent.Value : F::Render.Inactive.Value);
+        PushStyleColor(ImGuiCol_Text, tBind.m_bActive ? F::Render.Active.Value : F::Render.Inactive.Value);
         FText(sDisplayState.c_str());
         PopStyleColor();
 

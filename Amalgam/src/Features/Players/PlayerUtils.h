@@ -1,6 +1,5 @@
 #pragma once
 #include "../../SDK/SDK.h"
-#include <mutex>
 
 #define DEFAULT_TAG 0
 #define IGNORED_TAG (DEFAULT_TAG-1)
@@ -59,8 +58,6 @@ public:
 
 	bool m_bLoad = true;
 	bool m_bSave = false;
-
-	std::mutex m_mutex;
 
 private:
 	std::vector<int> m_vDummy = {};

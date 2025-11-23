@@ -1,7 +1,8 @@
 #include "PlayerUtils.h"
 
-#include "../../SDK/Definitions/Types.h"
+#include "../ImGui/Menu/Menu.h"
 #include "../Output/Output.h"
+#include "../../SDK/Definitions/Types.h"
 
 uint32_t CPlayerlistUtils::GetAccountID(int iIndex)
 {
@@ -433,8 +434,9 @@ void CPlayerlistUtils::Store()
 	if (!tTimer.Run(1.f))
 		return;
 
-	std::lock_guard lock(m_mutex);
+	std::lock_guard tLock(F::Menu.m_tMutex);
 	m_vPlayerCache.clear();
+
 	auto pResource = H::Entities.GetResource();
 	if (!pResource)
 		return;

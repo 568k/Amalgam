@@ -332,7 +332,7 @@ void CGlow::Initialize()
 	{
 		m_pMatGlowColor = I::MaterialSystem->FindMaterial("dev/glow_color", TEXTURE_GROUP_OTHER);
 		m_pMatGlowColor->IncrementReferenceCount();
-		F::Materials.m_mMatList[m_pMatGlowColor];
+		F::Materials.m_mMatList[m_pMatGlowColor] = true;
 	}
 
 	if (!m_pRenderBuffer1)

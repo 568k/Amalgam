@@ -75,7 +75,7 @@ void CChams::DrawModel(CBaseEntity* pEntity, Chams_t& tChams, IMatRenderContext*
 		pRenderContext->SetStencilEnable(false);
 		pRenderContext->DepthRange(0.f, 1.f);
 
-		m_mEntities[pEntity->entindex()];
+		m_mEntities[pEntity->entindex()] = true;
 	}
 
 	I::RenderView->SetColorModulation(m_tOriginalColor);

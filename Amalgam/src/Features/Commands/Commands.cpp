@@ -69,7 +69,7 @@ static std::unordered_map<uint32_t, CommandCallback> s_mCommands = {
 		}
 	},
 	{
-		FNV1A::Hash32Const("clear_chat"), 
+		FNV1A::Hash32Const("clearchat"), 
 		[](const std::deque<const char*>& vArgs)
 		{
 			I::ClientModeShared->m_pChatElement->SetText("");

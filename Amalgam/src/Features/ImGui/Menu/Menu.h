@@ -2,7 +2,6 @@
 #include "../../../SDK/SDK.h"
 #include "../Render.h"
 #include <ImGui/TextEditor.h>
-#include <mutex>
 
 struct Output_t
 {
@@ -39,8 +38,6 @@ public:
 	bool m_bIsOpen = false;
 	bool m_bInKeybind = false;
 	bool m_bWindowHovered = false;
-
-	std::mutex m_tMutex;
 };
 
 ADD_FEATURE(CMenu, Menu);

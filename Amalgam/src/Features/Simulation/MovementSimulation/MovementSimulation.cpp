@@ -5,6 +5,85 @@
 
 static CUserCmd s_tDummyCmd = {};
 
+namespace MoveSimConstants
+{
+	constexpr float HULL_PADDING = 0.125f;
+	constexpr float STOP_EPSILON = 0.015f;
+	constexpr float SLOPE_Z = 0.707f;
+	constexpr float MAX_VELOCITY_Z = 250.f;
+	constexpr float ENTITY_FRICTION = 0.25f;
+	constexpr float FRICTION_MAX = 56.f;
+	constexpr float MOVE_SPEED = 450.f;
+	constexpr float YAW_THRESHOLD = 0.36f;
+	constexpr float YAW_DIFF_THRESHOLD = 0.5f;
+}
+
+static inline float GetGravity(CTFPlayer* pPlayer)
+{
+	static auto sv_gravity = H::ConVars.FindVar("sv_gravity");
+	float flGravity = sv_gravity ? sv_gravity->GetFloat() : 800.f;
+
+	if (pPlayer->InCond(TF_COND_PARACHUTE_DEPLOYED))
+		flGravity *= 0.5f;
+
+	return flGravity;
+}
+
+class CScopedBounds
+{
+public:
+	CScopedBounds(CTFPlayer* pPlayer) : m_pPlayer(pPlayer)
+	{
+		if (m_pPlayer->entindex() == I::EngineClient->GetLocalPlayer())
+			return;
+
+		if (auto pGameRules = I::TFGameRules())
+		{
+			if (auto pViewVectors = pGameRules->GetViewVectors())
+			{
+				pViewVectors->m_vHullMin = Vec3(-24, -24, 0) + MoveSimConstants::HULL_PADDING;
+				pViewVectors->m_vHullMax = Vec3(24, 24, 82) - MoveSimConstants::HULL_PADDING;
+				pViewVectors->m_vDuckHullMin = Vec3(-24, -24, 0) + MoveSimConstants::HULL_PADDING;
+				pViewVectors->m_vDuckHullMax = Vec3(24, 24, 62) - MoveSimConstants::HULL_PADDING;
+				m_bChanged = true;
+			}
+		}
+	}
+
+	~CScopedBounds()
+	{
+		if (!m_bChanged)
+			return;
+
+		if (auto pGameRules = I::TFGameRules())
+		{
+			if (auto pViewVectors = pGameRules->GetViewVectors())
+			{
+				pViewVectors->m_vHullMin = Vec3(-24, -24, 0);
+				pViewVectors->m_vHullMax = Vec3(24, 24, 82);
+				pViewVectors->m_vDuckHullMin = Vec3(-24, -24, 0);
+				pViewVectors->m_vDuckHullMax = Vec3(24, 24, 62);
+			}
+		}
+	}
+
+private:
+	CTFPlayer* m_pPlayer = nullptr;
+	bool m_bChanged = false;
+};
+
+static inline float GetFrictionScale(CTFPlayer* pPlayer, float flVelocityXY, float flTurn, float flVelocityZ, float flMin = 50.f, float flMax = 150.f)
+{
+	if (0.f >= flVelocityZ || flVelocityZ > MoveSimConstants::MAX_VELOCITY_Z)
+		return 1.f;
+
+	static auto sv_airaccelerate = H::ConVars.FindVar("sv_airaccelerate");
+	float flScale = std::max(sv_airaccelerate->GetFloat(), 1.f);
+	flMin *= flScale, flMax *= flScale;
+
+	return Math::RemapVal(fabsf(flVelocityXY * flTurn), flMin, flMax, 1.f, MoveSimConstants::ENTITY_FRICTION);
+}
+
 void CMovementSimulation::Store(MoveStorage& tStorage)
 {
 	auto pMap = tStorage.m_pPlayer->GetPredDescMap();
@@ -298,84 +377,7 @@ bool CMovementSimulation::SetupMoveData(MoveStorage& tStorage)
 	return true;
 }
 
-namespace MoveSimConstants
-{
-	constexpr float HULL_PADDING = 0.125f;
-	constexpr float STOP_EPSILON = 0.015f;
-	constexpr float SLOPE_Z = 0.707f;
-	constexpr float MAX_VELOCITY_Z = 250.f;
-	constexpr float ENTITY_FRICTION = 0.25f;
-	constexpr float FRICTION_MAX = 56.f;
-	constexpr float MOVE_SPEED = 450.f;
-	constexpr float YAW_THRESHOLD = 0.36f;
-	constexpr float YAW_DIFF_THRESHOLD = 0.5f;
-}
 
-static inline float GetGravity(CTFPlayer* pPlayer)
-{
-	static auto sv_gravity = H::ConVars.FindVar("sv_gravity");
-	float flGravity = sv_gravity ? sv_gravity->GetFloat() : 800.f;
-
-	if (pPlayer->InCond(TF_COND_PARACHUTE_DEPLOYED))
-		flGravity *= 0.5f;
-
-	return flGravity;
-}
-
-class CScopedBounds
-{
-public:
-	CScopedBounds(CTFPlayer* pPlayer) : m_pPlayer(pPlayer)
-	{
-		if (m_pPlayer->entindex() == I::EngineClient->GetLocalPlayer())
-			return;
-
-		if (auto pGameRules = I::TFGameRules())
-		{
-			if (auto pViewVectors = pGameRules->GetViewVectors())
-			{
-				pViewVectors->m_vHullMin = Vec3(-24, -24, 0) + MoveSimConstants::HULL_PADDING;
-				pViewVectors->m_vHullMax = Vec3(24, 24, 82) - MoveSimConstants::HULL_PADDING;
-				pViewVectors->m_vDuckHullMin = Vec3(-24, -24, 0) + MoveSimConstants::HULL_PADDING;
-				pViewVectors->m_vDuckHullMax = Vec3(24, 24, 62) - MoveSimConstants::HULL_PADDING;
-				m_bChanged = true;
-			}
-		}
-	}
-
-	~CScopedBounds()
-	{
-		if (!m_bChanged)
-			return;
-
-		if (auto pGameRules = I::TFGameRules())
-		{
-			if (auto pViewVectors = pGameRules->GetViewVectors())
-			{
-				pViewVectors->m_vHullMin = Vec3(-24, -24, 0);
-				pViewVectors->m_vHullMax = Vec3(24, 24, 82);
-				pViewVectors->m_vDuckHullMin = Vec3(-24, -24, 0);
-				pViewVectors->m_vDuckHullMax = Vec3(24, 24, 62);
-			}
-		}
-	}
-
-private:
-	CTFPlayer* m_pPlayer = nullptr;
-	bool m_bChanged = false;
-};
-
-static inline float GetFrictionScale(CTFPlayer* pPlayer, float flVelocityXY, float flTurn, float flVelocityZ, float flMin = 50.f, float flMax = 150.f)
-{
-	if (0.f >= flVelocityZ || flVelocityZ > MoveSimConstants::MAX_VELOCITY_Z)
-		return 1.f;
-
-	static auto sv_airaccelerate = H::ConVars.FindVar("sv_airaccelerate");
-	float flScale = std::max(sv_airaccelerate->GetFloat(), 1.f);
-	flMin *= flScale, flMax *= flScale;
-
-	return Math::RemapVal(fabsf(flVelocityXY * flTurn), flMin, flMax, 1.f, MoveSimConstants::ENTITY_FRICTION);
-}
 
 //#define VISUALIZE_RECORDS
 #ifdef VISUALIZE_RECORDS

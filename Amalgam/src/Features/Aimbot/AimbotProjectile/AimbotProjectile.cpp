@@ -418,218 +418,335 @@ std::unordered_map<int, Vec3> CAimbotProjectile::GetDirectPoints(Target_t& tTarg
 static inline std::vector<std::pair<Vec3, int>> ComputeSphere(float flRadius, int iSamples)
 {
 	std::vector<std::pair<Vec3, int>> vPoints;
-	vPoints.reserve(iSamples);
+	vPoints.reserve(iSamples + 1);
 
-	float flRotateX = Vars::Aimbot::Projectile::SplashRotateX.Value < 0.f ? SDK::StdRandomFloat(0.f, 360.f) : Vars::Aimbot::Projectile::SplashRotateX.Value;
-	float flRotateY = Vars::Aimbot::Projectile::SplashRotateY.Value < 0.f ? SDK::StdRandomFloat(0.f, 360.f) : Vars::Aimbot::Projectile::SplashRotateY.Value;
+	// pasted from northern, hopefully this doesnt work like shit or destroy all my fps
+	const float flRotateX = (Vars::Aimbot::Projectile::SplashRotateX.Value < 0.f) ?
+		SDK::StdRandomFloat(0.f, 360.f) :
+		Vars::Aimbot::Projectile::SplashRotateX.Value;
 
-	int iPointType = Vars::Aimbot::Projectile::SplashGrates.Value ? PointTypeEnum::Regular | PointTypeEnum::Obscured : PointTypeEnum::Regular;
-	if (Vars::Aimbot::Projectile::RocketSplashMode.Value == Vars::Aimbot::Projectile::RocketSplashModeEnum::SpecialHeavy)
-		iPointType |= PointTypeEnum::ObscuredExtra | PointTypeEnum::ObscuredMulti;
+	const float flRotateY = (Vars::Aimbot::Projectile::SplashRotateY.Value < 0.f) ?
+		SDK::StdRandomFloat(0.f, 360.f) :
+		Vars::Aimbot::Projectile::SplashRotateY.Value;
 
-	float a = PI * (3.f - sqrtf(5.f));
-	for (int n = 0; n < iSamples; n++)
-	{
-		float t = a * n;
-		float y = 1 - (n / (iSamples - 1.f)) * 2;
-		float r = sqrtf(1 - powf(y, 2));
-		float x = cosf(t) * r;
-		float z = sinf(t) * r;
+	int iPointType = Vars::Aimbot::Projectile::SplashGrates.Value ?
+		(PointTypeEnum::Regular | PointTypeEnum::Obscured) :
+		PointTypeEnum::Regular;
 
-		Vec3 vPoint = Vec3(x, y, z) * flRadius;
+	if (Vars::Aimbot::Projectile::RocketSplashMode.Value ==
+		Vars::Aimbot::Projectile::RocketSplashModeEnum::SpecialHeavy) {
+		iPointType |= (PointTypeEnum::ObscuredExtra | PointTypeEnum::ObscuredMulti);
+	}
+
+	const float GOLDEN_ANGLE = 2.399963229728653f;
+	const float invSamples = 1.0f / iSamples;
+
+	for (int i = 0; i < iSamples; ++i) {
+		const float t = (i + 0.5f) * invSamples;
+		const float phi = acosf(1.0f - 2.0f * t); 
+
+		const float sinPhi = sinf(phi);
+		const float cosPhi = cosf(phi);
+
+		const float theta = GOLDEN_ANGLE * i;
+		const float cosTheta = cosf(theta);
+		const float sinTheta = sinf(theta);
+
+		const float x = cosTheta * sinPhi;
+		const float y = sinTheta * sinPhi;
+		const float z = cosPhi;
+
+		Vec3 vPoint(x * flRadius, y * flRadius, z * flRadius);
 		vPoint = Math::RotatePoint(vPoint, {}, { flRotateX, flRotateY });
 
 		vPoints.emplace_back(vPoint, iPointType);
 	}
-	vPoints.emplace_back(Vec3(0.f, 0.f, -1.f) * flRadius, iPointType);
+
+	Vec3 vBottom(0.0f, 0.0f, -flRadius);
+	vBottom = Math::RotatePoint(vBottom, {}, { flRotateX, flRotateY });
+	vPoints.emplace_back(vBottom, iPointType);
 
 	return vPoints;
 };
 
 template <class T>
-static inline void TracePoint(Vec3& vPoint, int& iType, Vec3& vTargetEye, Info_t& tInfo, T& vPoints, std::function<bool(CGameTrace& trace, bool& bErase, bool& bNormal)> checkPoint, int i = 0)
+static inline void TracePoint(Vec3& vPoint, int& iType, Vec3& vTargetEye, Info_t& tInfo,
+	T& vPoints, std::function<bool(CGameTrace& trace, bool& bErase, bool& bNormal)> checkPoint, int i = 0)
 {
-	// if anyone knows ways to further optimize this or just a better method, let me know!
+	const int iOriginalType = iType;
+	size_t iStartSize = vPoints.size();
 
-	int iOriginalType = iType;
-	bool bErase = false, bNormal = false;
-
-	CGameTrace trace = {};
-	CTraceFilterWorldAndPropsOnly filter = {};
+	bool bErase = false;
+	bool bNormal = false;
+	CGameTrace trace;
+	CTraceFilterWorldAndPropsOnly filter;
 
 #if defined(SPLASH_DEBUG1) || defined(SPLASH_DEBUG2)
-	auto drawTrace = [](bool bSuccess, Color_t tColor, CGameTrace& trace)
-		{
-			Vec3 vMins = Vec3(-1, -1, -1) / (bSuccess ? 1 : 2), vMaxs = Vec3(1, 1, 1) / (bSuccess ? 1 : 2);
-			Vec3 vAngles = Math::VectorAngles(trace.plane.normal);
-			G::BoxStorage.emplace_back(trace.endpos, vMins, vMaxs, vAngles, I::GlobalVars->curtime + 60.f, tColor.Alpha(tColor.a / (bSuccess ? 1 : 10)), Color_t(0, 0, 0, 0));
-			G::LineStorage.emplace_back(std::pair<Vec3, Vec3>(trace.startpos, trace.endpos), I::GlobalVars->curtime + 60.f, tColor.Alpha(tColor.a / (bSuccess ? 1 : 10)));
+	auto DrawTrace = [](bool bSuccess, Color_t tColor, CGameTrace& trace) {
+		Vec3 vMins = Vec3(-1, -1, -1) / (bSuccess ? 1 : 2);
+		Vec3 vMaxs = Vec3(1, 1, 1) / (bSuccess ? 1 : 2);
+		Vec3 vAngles = Math::VectorAngles(trace.plane.normal);
+
+		G::BoxStorage.emplace_back(trace.endpos, vMins, vMaxs, vAngles,
+			I::GlobalVars->curtime + 60.f,
+			tColor.Alpha(tColor.a / (bSuccess ? 1 : 10)),
+			Color_t(0, 0, 0, 0));
+
+		G::LineStorage.emplace_back(std::pair<Vec3, Vec3>(trace.startpos, trace.endpos),
+			I::GlobalVars->curtime + 60.f,
+			tColor.Alpha(tColor.a / (bSuccess ? 1 : 10)));
 		};
 #endif
 
 	if (iType & PointTypeEnum::Regular)
 	{
-		SDK::TraceHull(vTargetEye, vPoint, tInfo.m_vHull * -1, tInfo.m_vHull, MASK_SOLID, &filter, &trace);
+
+		SDK::Trace(tInfo.m_vLocalEye, vPoint, MASK_SOLID, &filter, &trace);
+
 #ifdef SPLASH_DEBUG6
 		s_mTraceCount["Splash regular"]++;
 #endif
 
+
 		if (checkPoint(trace, bErase, bNormal))
 		{
+	
 			if (i % Vars::Aimbot::Projectile::SplashNormalSkip.Value)
 				vPoints.pop_back();
+
 #ifdef SPLASH_DEBUG1
-			else
-				drawTrace(!bNormal, Vars::Colors::Local.Value, trace);
+			else if (!bNormal)
+				DrawTrace(false, Vars::Colors::Local.Value, trace);
 #endif
 		}
 
+
 		if (bErase)
+		{
 			iType = 0;
+			return;
+		}
 		else if (bNormal)
-			iType &= ~PointTypeEnum::Regular;
+		{
+			iType &= ~PointTypeEnum::Regular; 
+		}
 		else
-			iType &= ~PointTypeEnum::Obscured;
+		{
+			iType &= ~PointTypeEnum::Obscured; 
+		}
 	}
+
 	if (iType & PointTypeEnum::ObscuredExtra)
 	{
-		bErase = false, bNormal = false;
-		size_t iOriginalSize = vPoints.size();
+		bErase = false;
+		bNormal = false;
 
+	
+		Vec3 toTarget = vTargetEye - tInfo.m_vLocalEye;
+		Vec3 toPoint = vPoint - vTargetEye;
+		if (toTarget.Dot(toPoint) > 0.f)
 		{
-			// necessary performance wise?
-			if (bNormal = (tInfo.m_vLocalEye - vTargetEye).Dot(vTargetEye - vPoint) > 0.f)
-				goto breakOutExtra;
+			bNormal = true; 
+		}
+		else
+		{
 
-			if (!(iOriginalType & PointTypeEnum::Regular)) // don't do the same trace over again
+			if (!(iOriginalType & PointTypeEnum::Regular))
 			{
-				SDK::Trace(vTargetEye, vPoint, MASK_SOLID, &filter, &trace);
+				SDK::Trace(tInfo.m_vLocalEye, vPoint, MASK_SOLID | CONTENTS_NOSTARTSOLID, &filter, &trace);
+
 #ifdef SPLASH_DEBUG6
 				s_mTraceCount["Splash rocket (2)"]++;
 #endif
-				bNormal = !trace.m_pEnt || trace.fraction == 1.f;
+
+				bNormal = !trace.m_pEnt || trace.fraction > 1.f || trace.allsolid || trace.startsolid;
+
 #ifdef SPLASH_DEBUG2
-				drawTrace(!bNormal, Vars::Colors::IndicatorTextMid.Value, trace);
+				DrawTrace(!bNormal, Vars::Colors::IndicatorTextMid.Value, trace);
 #endif
-				if (bNormal)
-					goto breakOutExtra;
 			}
 
-			filter.pSkip = trace.m_pEnt->GetClassID() != ETFClassID::CWorld || trace.hitbox ? trace.m_pEnt : nullptr; // make sure we get past entity or prop
-			SDK::Trace(trace.endpos - (vTargetEye - vPoint).Normalized(), vPoint, MASK_SOLID | CONTENTS_NOSTARTSOLID, &filter, &trace);
-			filter.pSkip = nullptr;
-#ifdef SPLASH_DEBUG6
-			s_mTraceCount["Splash rocket (2, 2)"]++;
-#endif
-			bNormal = trace.fraction == 1.f || trace.allsolid || (trace.startpos - trace.endpos).IsZero() || trace.surface.flags & (/*SURF_NODRAW |*/ SURF_SKY);
-#ifdef SPLASH_DEBUG2
-			drawTrace(!bNormal, Vars::Colors::IndicatorTextBad.Value, trace);
-#endif
-			if (bNormal)
-				goto breakOutExtra;
-
-			if (checkPoint(trace, bErase, bNormal))
+	
+			if (!bNormal)
 			{
-				SDK::Trace(trace.endpos + trace.plane.normal, vTargetEye, MASK_SHOT, &filter, &trace);
+			
+				if (trace.m_pEnt && (trace.m_pEnt->GetClassID() != ETFClassID::CWorld || trace.hitbox))
+					filter.pSkip = trace.m_pEnt;
+
+		
+				Vec3 startPos = trace.endpos - (vTargetEye - vPoint).Normalized();
+				SDK::Trace(startPos, vPoint, MASK_SOLID | CONTENTS_NOSTARTSOLID, &filter, &trace);
+				filter.pSkip = nullptr;
+
 #ifdef SPLASH_DEBUG6
-				s_mTraceCount["Splash rocket check (2)"]++;
+				s_mTraceCount["Splash rocket (2, 2)"]++;
 #endif
+
+		
+				bNormal = trace.fraction > 1.f || trace.allsolid || trace.startsolid ||
+					(trace.startpos - trace.endpos).IsZero() ||
+					trace.surface.flags & SURF_SKY;
+
 #ifdef SPLASH_DEBUG2
-				drawTrace(trace.fraction >= 1.f, Vars::Colors::IndicatorTextMisc.Value, trace);
+				DrawTrace(!bNormal, Vars::Colors::IndicatorTextBad.Value, trace);
 #endif
-				if (trace.fraction < 1.f)
-					vPoints.pop_back();
+
+				if (!bNormal && checkPoint(trace, bErase, bNormal))
+				{
+					SDK::Trace(trace.endpos + trace.plane.normal, vTargetEye,
+						MASK_SHOT | CONTENTS_NOSTARTSOLID, &filter, &trace);
+
+#ifdef SPLASH_DEBUG6
+					s_mTraceCount["Splash rocket check (2)"]++;
+#endif
+
+#ifdef SPLASH_DEBUG2
+					DrawTrace(trace.fraction >= 1.f, Vars::Colors::IndicatorTextMisc.Value, trace);
+#endif
+
+	
+					if (trace.DidHit())
+						vPoints.pop_back();
+				}
 			}
 		}
 
-		breakOutExtra:
-		if (vPoints.size() != iOriginalSize)
+	
+		if (vPoints.size() != iStartSize)
+		{
 			iType = 0;
+		}
 		else if (bErase || bNormal)
+		{
 			iType &= ~PointTypeEnum::ObscuredExtra;
+		}
 	}
+
+
 	if (iType & PointTypeEnum::Obscured)
 	{
-		bErase = false, bNormal = false;
-		size_t iOriginalSize = vPoints.size();
+		bErase = false;
+		bNormal = false;
 
-		if (bNormal = (tInfo.m_vLocalEye - vTargetEye).Dot(vTargetEye - vPoint) > 0.f)
-			goto breakOut;
 
-		if (tInfo.m_iSplashMode == Vars::Aimbot::Projectile::RocketSplashModeEnum::Regular) // just do this for non rockets, it's less expensive
+		Vec3 toTarget = vTargetEye - tInfo.m_vLocalEye;
+		Vec3 toPoint = vPoint - vTargetEye;
+		if (toTarget.Dot(toPoint) > 0.f)
 		{
-			SDK::Trace(vPoint, vTargetEye, MASK_SHOT, &filter, &trace);
+			bNormal = true;
+		}
+
+		else if (tInfo.m_iSplashMode == Vars::Aimbot::Projectile::RocketSplashModeEnum::Regular)
+		{
+	
+			SDK::Trace(vPoint, vTargetEye, MASK_SHOT | CONTENTS_NOSTARTSOLID, &filter, &trace);
+
 #ifdef SPLASH_DEBUG6
 			s_mTraceCount["Splash grate check"]++;
 #endif
+
 			bNormal = trace.DidHit();
-#ifdef SPLASH_DEBUG2
-			drawTrace(!bNormal, Vars::Colors::IndicatorGood.Value, trace);
-#endif
-			if (bNormal)
-				goto breakOut;
 
-			SDK::TraceHull(vPoint, vTargetEye, tInfo.m_vHull * -1, tInfo.m_vHull, MASK_SOLID, &filter, &trace);
+#ifdef SPLASH_DEBUG2
+			DrawTrace(!bNormal, Vars::Colors::IndicatorGood.Value, trace);
+#endif
+
+
+			if (!bNormal)
+			{
+				SDK::Trace(vPoint, vTargetEye, MASK_SOLID | CONTENTS_NOSTARTSOLID, &filter, &trace);
+
 #ifdef SPLASH_DEBUG6
-			s_mTraceCount["Splash grate"]++;
+				s_mTraceCount["Splash grate"]++;
 #endif
 
-			checkPoint(trace, bErase, bNormal);
+				checkPoint(trace, bErase, bNormal);
+
 #ifdef SPLASH_DEBUG2
-			drawTrace(!bNormal, Vars::Colors::Local.Value, trace);
+				DrawTrace(!bNormal, Vars::Colors::Local.Value, trace);
 #endif
+			}
 		}
-		else // currently experimental, there may be a more efficient way to do this?
+		else
 		{
+		
 			SDK::Trace(vPoint, vTargetEye, MASK_SOLID | CONTENTS_NOSTARTSOLID, &filter, &trace);
+
 #ifdef SPLASH_DEBUG6
 			s_mTraceCount["Splash rocket (1)"]++;
 #endif
-			bNormal = trace.fraction == 1.f || trace.allsolid || trace.surface.flags & SURF_SKY;
-#ifdef SPLASH_DEBUG2
-			drawTrace(!bNormal, Vars::Colors::IndicatorMid.Value, trace);
-#endif
-			if (!bNormal && trace.surface.flags & SURF_NODRAW)
-			{
-				if (bNormal = !(iType & PointTypeEnum::ObscuredMulti))
-					goto breakOut;
 
-				CGameTrace trace2 = {};
-				SDK::Trace(trace.endpos - (vPoint - vTargetEye).Normalized(), vTargetEye, MASK_SOLID | CONTENTS_NOSTARTSOLID, &filter, &trace2);
+	
+			bNormal = trace.fraction > 1.f || trace.allsolid || trace.startsolid ||
+				trace.surface.flags & SURF_SKY;
+
+#ifdef SPLASH_DEBUG2
+			DrawTrace(!bNormal, Vars::Colors::IndicatorMid.Value, trace);
+#endif
+
+
+			if (!bNormal && (trace.surface.flags & SURF_NODRAW))
+			{
+				if (iType & PointTypeEnum::ObscuredMulti)
+				{
+					CGameTrace trace2;
+					Vec3 startPos = trace.endpos - (vPoint - vTargetEye).Normalized();
+					SDK::Trace(startPos, vTargetEye, MASK_SOLID | CONTENTS_NOSTARTSOLID, &filter, &trace2);
+
 #ifdef SPLASH_DEBUG6
-				s_mTraceCount["Splash rocket (1, 2)"]++;
+					s_mTraceCount["Splash rocket (1, 2)"]++;
 #endif
-				bNormal = trace2.fraction == 1.f || trace.allsolid || (trace2.startpos - trace2.endpos).IsZero() || trace2.surface.flags & (SURF_NODRAW | SURF_SKY);
-#ifdef SPLASH_DEBUG2
-				drawTrace(!bNormal, Vars::Colors::IndicatorBad.Value, trace2);
-#endif
-				if (!bNormal)
-					trace = trace2;
-			}
-			if (bNormal)
-				goto breakOut;
 
-			if (checkPoint(trace, bErase, bNormal))
+					bNormal = trace2.fraction > 1.f || trace2.allsolid || trace2.startsolid ||
+						(trace2.startpos - trace2.endpos).IsZero() ||
+						trace2.surface.flags & (SURF_NODRAW | SURF_SKY);
+
+#ifdef SPLASH_DEBUG2
+					DrawTrace(!bNormal, Vars::Colors::IndicatorBad.Value, trace2);
+#endif
+
+					if (!bNormal)
+						trace = trace2;
+				}
+				else
+				{
+					bNormal = true;
+				}
+			}
+
+			if (!bNormal && checkPoint(trace, bErase, bNormal))
 			{
-				SDK::Trace(trace.endpos + trace.plane.normal, vTargetEye, MASK_SHOT, &filter, &trace);
+				SDK::Trace(trace.endpos + trace.plane.normal, vTargetEye,
+					MASK_SHOT | CONTENTS_NOSTARTSOLID, &filter, &trace);
+
 #ifdef SPLASH_DEBUG6
 				s_mTraceCount["Splash rocket check (1)"]++;
 #endif
+
 #ifdef SPLASH_DEBUG2
-				drawTrace(!bNormal, Vars::Colors::IndicatorMisc.Value, trace);
+				DrawTrace(trace.fraction >= 1.f, Vars::Colors::IndicatorMisc.Value, trace);
 #endif
-				if (trace.fraction < 1.f)
+
+		
+				if (trace.DidHit())
 					vPoints.pop_back();
 			}
 		}
 
-		breakOut:
-		if (vPoints.size() != iOriginalSize)
-			iType = 0;
+
+		if (vPoints.size() != iStartSize)
+		{
+			iType = 0; 
+		}
 		else if (bErase || bNormal)
-			iType &= ~PointTypeEnum::Obscured;
+		{
+			iType &= ~PointTypeEnum::Obscured; 
+		}
 		else
+		{
+			
 			iType &= ~PointTypeEnum::Regular;
+		}
 	}
 }
 

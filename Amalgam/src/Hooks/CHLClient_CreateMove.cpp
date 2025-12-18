@@ -250,7 +250,7 @@ MAKE_HOOK(CHLClient_CreateMove, U::Memory.GetVirtual(I::Client, 21), void,
 
 	UpdateInfo(pLocal, pWeapon, pCmd);
 		F::Spectate.CreateMove(pCmd);
-		F::Backtrack.CreateMove(pCmd);
+		F::Backtrack.CreateMove(pLocal, pWeapon, pCmd);
 		F::Misc.RunPre(pLocal, pCmd);
 	F::Ticks.Start(pLocal, pCmd);
 		F::Aimbot.Run(pLocal, pWeapon, pCmd);

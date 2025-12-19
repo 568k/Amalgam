@@ -7,10 +7,9 @@
 [![Workflow status](https://img.shields.io/github/actions/workflow/status/progamienr/Amalgam/msbuild.yml?branch=master&style=for-the-badge)](/../../actions)
 [![Commit activity](https://img.shields.io/github/commit-activity/m/progamienr/Amalgam?style=for-the-badge)](/../../commits/)
 
-<p>A paste with some decent features</p>
+<p>A dope splashbot from Northern, Backtrack to crosshair like a boss, Extreme Arc Angles like a BOSS, and some movesim shenanigans</p>
 <p>
-<strong>Note:</strong> To shoot more extreme angles with arc trajectory, increase stim (Simulation Time, though this increases lag when using Demoman due to the splashbot and arc changes, I will not be fixing these problems any time soon).
-I personally use <code>10s</code>.
+<strong>Note:</strong> To shoot more extreme angles with arc trajectory, increase stim (Simulation Time)<code>10s</code>.
 </p>
 
 </div>

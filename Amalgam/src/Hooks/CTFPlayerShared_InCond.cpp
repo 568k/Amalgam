@@ -34,6 +34,7 @@ MAKE_HOOK(CTFPlayerShared_InCond, S::CTFPlayerShared_InCond(), bool,
 
 	switch (nCond)
 	{
+
 	case TF_COND_ZOOMED:
 		if (dwRetAddr == dwZoomPlayer || dwRetAddr == dwZoomWearable || Vars::Visuals::Removals::Scope.Value && dwRetAddr == dwZoomHudScope)
 			return false;
@@ -55,6 +56,7 @@ MAKE_HOOK(CTFPlayerShared_InCond, S::CTFPlayerShared_InCond(), bool,
 	case TF_COND_FREEZE_INPUT:
 		if (!CALL_ORIGINAL(rcx, TF_COND_HALLOWEEN_KART) || Vars::Misc::Automation::KartControl.Value)
 			return false;
+		break;
 	}
 
 	return CALL_ORIGINAL(rcx, nCond);

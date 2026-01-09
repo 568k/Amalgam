@@ -7,6 +7,7 @@
 #include "../../Ticks/Ticks.h"
 #include "../../Visuals/Visuals.h"
 #include "../AutoAirblast/AutoAirblast.h"
+#include "SeamFinder/SeamFinder.h"
 
 //#define SPLASH_DEBUG1 // normal splash visualization
 //#define SPLASH_DEBUG2 // obstructed splash visualization
@@ -480,6 +481,63 @@ static inline std::vector<std::pair<Vec3, int>> ComputeSphere(float flRadius, in
 
 	return vPoints;
 };
+
+static inline std::vector<std::pair<Vec3, int>> ComputeSeams(CTFPlayer* pTarget, Info_t& tInfo)
+{
+	std::vector<std::pair<Vec3, int>> vPoints;
+
+	// Directions to scan
+	std::vector<Vec3> vDirections = {
+		{ 0, 0, 1 }, { 0, 0, -1 } // Up, Down
+	};
+
+	// Cardinals and Diagonals (Horizontal)
+	for (int i = 0; i < 8; i++)
+	{
+		float flAngle = DEG2RAD(i * 45.f);
+		float c = cos(flAngle), s = sin(flAngle);
+		vDirections.push_back({ c, s, 0 });
+	}
+
+	// Rings (Up/Down 45 deg)
+	for (int i = 0; i < 8; i++)
+	{
+		float flAngle = DEG2RAD(i * 45.f);
+		float c = cos(flAngle), s = sin(flAngle);
+		float flZ = 0.70710678f; // sin(45)
+		float flXY = 0.70710678f; // cos(45)
+		vDirections.push_back({ c * flXY, s * flXY, flZ });
+		vDirections.push_back({ c * flXY, s * flXY, -flZ });
+	}
+
+	Vec3 vOrigin = pTarget->GetCenter();
+	for (const auto& vDir : vDirections)
+	{
+		CGameTrace trace;
+		CTraceFilterWorldAndPropsOnly filter;
+		SDK::Trace(vOrigin, vOrigin + vDir * tInfo.m_flRadius, MASK_SOLID, &filter, &trace);
+
+		if (trace.DidHit())
+		{
+			// Add slightly offset point to ensure we hit the surface
+			Vec3 vHitPos = trace.endpos;
+			// Convert to offset from TargetEye (which is what vSpherePoints expects)
+			// vPoint = Offset + TargetEye -> Offset = vPoint - TargetEye
+			// TargetEye = TargetPos + m_tInfo.m_vTargetEye
+			// But wait, vSpherePoints are offsets from m_vTargetEye?
+			// Let's check GetSplashPoints:
+			// Vec3 vPoint = it->first + vTargetEye;
+			// vTargetEye = tTarget.m_vPos + m_tInfo.m_vTargetEye;
+			// So it->first = vPoint - (tTarget.m_vPos + m_tInfo.m_vTargetEye);
+
+			// We use pTarget->GetOrigin() as tTarget.m_vPos (current pos).
+			Vec3 vOffset = vHitPos - (pTarget->m_vecOrigin() + tInfo.m_vTargetEye);
+			vPoints.emplace_back(vOffset, PointTypeEnum::Regular);
+		}
+	}
+
+	return vPoints;
+}
 
 template <class T>
 static inline void TracePoint(Vec3& vPoint, int& iType, Vec3& vTargetEye, Info_t& tInfo,
@@ -2279,6 +2337,18 @@ bool CAimbotProjectile::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBa
 
 	auto mDirectPoints = iSplash == Vars::Aimbot::Projectile::SplashPredictionEnum::Only ? std::unordered_map<int, Vec3>() : GetDirectPoints(tTarget, pProjectile);
 	auto vSpherePoints = !iSplash ? std::vector<std::pair<Vec3, int>>() : ComputeSphere(m_tInfo.m_flRadius + flSize, iPoints);
+
+	if (iSplash && tTarget.m_iTargetType == TargetEnum::Player)
+	{
+		auto vSeams = F::SeamFinder.FindSeamsInRadius(tTarget.m_pEntity->GetCenter(), m_tInfo.m_flRadius);
+		for (const auto& seam : vSeams)
+		{
+			Vec3 vOrigin = tTarget.m_pEntity->m_vecOrigin();
+			vSpherePoints.emplace_back(seam.m_vPoint1 - vOrigin, PointTypeEnum::Regular);
+			vSpherePoints.emplace_back(seam.m_vPoint2 - vOrigin, PointTypeEnum::Regular);
+			vSpherePoints.emplace_back((seam.m_vPoint1 + seam.m_vPoint2) * 0.5f - vOrigin, PointTypeEnum::Regular);
+		}
+	}
 
 	Vec3 vAngleTo, vPredicted, vTarget;
 	int iLowestPriority = std::numeric_limits<int>::max(); float flLowestDist = std::numeric_limits<float>::max();

@@ -1,32 +1,36 @@
 #include "WarpPrediction.h"
+#include "../../../Simulation/MovementSimulation/MovementSimulation.h"
 
-namespace WarpPrediction { // worse than my original warp prediction for amalgam, but whatever.
-    static inline float Phi() { return 1.6180339887f; }
-    static inline float Cross2D(const Vec3& a, const Vec3& b) { return fabsf(a.x * b.y - a.y * b.x); }
+namespace WarpPrediction // i dont even know if this works as intended, but its worth a try
+{
+	bool ShouldPredict(CTFPlayer* target)
+	{
+		if (!target)
+			return false;
+		return H::Entities.GetLagCompensation(target->entindex());
+	}
 
-    bool ShouldPredict(CTFPlayer* target) {
-        if (!target) return false;
-        return H::Entities.GetLagCompensation(target->entindex());
-    }
+	Vec3 PredictDelta(CTFPlayer* target, const Vec3& eyePos, const Vec3& origin)
+	{
+		if (!target || !ShouldPredict(target))
+			return {};
 
-    Vec3 PredictDelta(CTFPlayer* target, const Vec3& eyePos, const Vec3& origin) {
-        Vec3 v = target ? target->m_vecVelocity() : Vec3();
-        Vec3 v2d = { v.x, v.y, 0.f };
-        float speed = v2d.Length();
-        if (speed <= 0.f) return {};
+		float flDelta = target->m_flSimulationTime() - target->m_flOldSimulationTime();
+		int nTicks = TIME_TO_TICKS(flDelta);
 
-        Vec3 dir = (origin - eyePos);
-        dir.z = 0.f;
-        if (dir.IsZero()) return {};
-        dir.Normalize();
-        Vec3 vNorm = v2d / speed;
+		if (nTicks <= 0 || nTicks > 22)
+			return {};
 
-        float d = std::clamp(dir.Dot(vNorm), -1.f, 1.f);
-        float c = Cross2D(dir, vNorm);
+		MoveStorage tStorage;
+		if (!F::MoveSim.Initialize(target, tStorage))
+			return {};
 
-        float w = sqrtf(std::max(eyePos.DistTo(origin), 0.f));
-        float dt = std::clamp((Phi() * w) / std::max(speed, 1.f), TICK_INTERVAL, 0.5f);
-        float scale = std::clamp(0.5f + 0.5f * d + 0.25f * c, 0.f, 1.5f);
-        return v * (dt * scale);
-    }
+		for (int i = 0; i < nTicks; i++)
+			F::MoveSim.RunTick(tStorage);
+
+		Vec3 vPredictedPos = tStorage.m_MoveData.m_vecAbsOrigin;
+		F::MoveSim.Restore(tStorage);
+
+		return vPredictedPos - origin;
+	}
 }

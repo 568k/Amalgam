@@ -58,6 +58,7 @@ public:
 
 	bool Initialize(ProjectileInfo& tProjInfo, bool bSimulate = true, bool bWorld = false);
 	void RunTick(ProjectileInfo& tProjInfo, bool bPath = true);
+	void ApplyTraceResult(const CGameTrace& trace);
 	Vec3 GetOrigin();
 	Vec3 GetVelocity();
 

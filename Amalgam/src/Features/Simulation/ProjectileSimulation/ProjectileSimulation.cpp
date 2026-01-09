@@ -581,7 +581,7 @@ bool CProjectileSimulation::Initialize(ProjectileInfo& tProjInfo, bool bSimulate
 	return true;
 }
 
-void CProjectileSimulation::RunTick(ProjectileInfo& tProjInfo, bool bPath) // bug: per frame projectile trace can cause inconsistencies?
+void CProjectileSimulation::RunTick(ProjectileInfo& tProjInfo, bool bPath) // keep path in sync with the physics step
 {
 	if (!m_pEnv)
 		return;
@@ -599,6 +599,29 @@ void CProjectileSimulation::RunTick(ProjectileInfo& tProjInfo, bool bPath) // bu
 	vVelocity = { std::clamp(vVelocity.x, -flMaxVel, flMaxVel), std::clamp(vVelocity.y, -flMaxVel, flMaxVel), std::clamp(vVelocity.z, -flMaxVel, flMaxVel) };
 	m_pObj->SetVelocity(&vVelocity, &vAngular);
 	*/
+}
+
+void CProjectileSimulation::ApplyTraceResult(const CGameTrace& trace)
+{
+	if (!m_pObj || trace.fraction == 1.f)
+		return;
+
+	Vec3 vPos, vAng;
+	m_pObj->GetPosition(&vPos, &vAng);
+	vPos = trace.endpos;
+	m_pObj->SetPosition(vPos, vAng, true);
+
+	if (trace.DidHit() && !trace.plane.normal.IsZero())
+	{
+		Vec3 vVel, vAngVel;
+		m_pObj->GetVelocity(&vVel, &vAngVel);
+
+		const float flInto = vVel.Dot(trace.plane.normal);
+		if (flInto < 0.f)
+			vVel -= trace.plane.normal * flInto; // remove penetration into the hit plane
+
+		m_pObj->SetVelocity(&vVel, &vAngVel);
+	}
 }
 
 Vec3 CProjectileSimulation::GetOrigin()

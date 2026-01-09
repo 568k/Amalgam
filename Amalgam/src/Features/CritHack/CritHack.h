@@ -47,7 +47,7 @@ private:
 	int m_iPotentialCrits = 0;
 	int m_iNextCrit = 0;
 
-	int m_iEntIndex = 0;
+int m_iEntIndex = 0;
 	bool m_bMelee = false;
 	float m_flCritChance = 0.f;
 	float m_flMultCritChance = 1.f;
